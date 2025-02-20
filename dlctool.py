@@ -161,9 +161,18 @@ class GDBController:
         self.port = port
         self.pid = pid
         self.gdbserver_path = gdbserver_path
+        
+        gdb_cmd = ['aarch64-unknown-linux-gnu-gdb', '--quiet', '--nx', '-i=mi', '--se', f'{symbol_file}' ] 
+        config = [ 
+            "-ex", "set pagination off",
+            "-ex", "set logging file gdb.txt",
+            "-ex", "set logging enabled on"
+        ]
+        gdb_cmd.extend(config)
+        # print(' '.join(gdb_cmd))
         try:
             self._gdb = subprocess.Popen(
-                ['aarch64-unknown-linux-gnu-gdb', '--quiet', '-i=mi', '--se', f'{symbol_file}' ],
+                gdb_cmd,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -183,20 +192,8 @@ class GDBController:
         self._reader_thread.start()
 
         # 初始化GDB会话
-        self._send_command("set pagination off")
-        self._send_command("set logging enabled on")
-        self._send_command("set logging file gdb_output.txt")
-        self._send_command("set logging overwrite on")
-        # self._send_command("set confirm off")
-        # self._send_command("set non-stop on")
-        # self._send_command(f"attach {pid}")
         try: 
-            self._wait_for_ready()
-            self._wait_for_ready()
-            self._wait_for_ready()
-            self._wait_for_ready()
-            self._wait_for_ready()
-            self._wait_for_ready()
+            res = self._wait_for_ready()
             success, msg = self._start_server()
             if not success:
                 sys.stderr.write(f"Error starting gdbserver: {msg}\n")
@@ -206,14 +203,14 @@ class GDBController:
             if "Operation timed out" in res:
                 sys.stderr.write(f"Error connecting to {host}:{port}\n")
                 sys.exit(1)
-            self._send_command("set solib-search-path ~/code/rust/")
+            self._send_command("set solib-search-path ./")
             self._wait_for_ready()
         except RuntimeError as e:
             sys.stderr.write(f"Error initializing gdb: {e}\n")
             sys.stderr.write(self._gdb.stderr.read())
             sys.exit(1)
 
-    def _start_server(self, timeout: float=2.0) -> Tuple[bool, str]:
+    def _start_server(self, timeout: float=3.0) -> Tuple[bool, str]:
         """
         通过 adb 启动 gdbserver 并检测权限问题
         :param pid: 目标进程的 PID
@@ -269,7 +266,7 @@ class GDBController:
         if "Listening on port" in output:
             return (True, f"gdbserver 已启动: {output.strip()}")
         proc.kill()
-        return (False, f"未知错误:\n {output.strip()}")
+        return (False, f"未知错误: {' '.join(cmd)}\n{output.strip()}\n")
        
 
     def _send_command(self, command):
@@ -585,7 +582,7 @@ def main():
 
     print(f"tools path: {args.tools_dir}")
     # 创建strace wrapper
-    strace_path = args.tools_dir + "strace"
+    strace_path = args.tools_dir + '/' + "strace"
     wrapperStrace = WrapperStrace(pid, strace_path=strace_path, timeout=args.timeout)
     # 运行strace并获取结果
     res = wrapperStrace.run()
