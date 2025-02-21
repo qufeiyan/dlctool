@@ -412,7 +412,9 @@ class GDBController:
 class DeadLockChecker:   
     def __init__(self, data: List[Tuple[str, str, str]], stack_info: Dict[str, Dict[str, List[str]]]):
         self.data = data
-        self.graph, self.wait_info = self._build_graph()
+        # wait_info: {key: tid, value: mutex address}
+        # held_info: {key: mutex address, value: tid}
+        self.graph, self.wait_info, self.held_info = self._build_graph()
         self.stack_info = stack_info
 
     # Tarjan 算法查找强连通分量
@@ -484,7 +486,7 @@ class DeadLockChecker:
         print(f"sccs: {result}")
         return result
 
-    def _build_graph(self) -> Tuple[Dict[str, List[str]], Dict[int, int]]:
+    def _build_graph(self) -> Tuple[Dict[str, List[str]], Dict[str, str], Dict[str, str]]:
         data = self.data
         # 用于存储图的字典，默认值为一个空列表
         graph: Dict[str, List[str]] = defaultdict(list)
@@ -509,45 +511,47 @@ class DeadLockChecker:
                 graph[mutex].append(holder)
                 # 记录等待信息
                 wait_info[tid] = mutex
-        return graph, wait_info
+        return graph, wait_info, holding_mutex
 
     def _format_deadlock_cycles(self, sccs: List[List[str]]) -> List[str]:
-        wait_info = self.wait_info 
-        stack_info = self.stack_info 
         # 用于存储格式化后的死锁环的列表
         formatted_cycles: List[str] = []
         # 遍历每个强连通分量
         for scc in sccs:
-            # 用于存储当前死锁环的字符串
-            cycle_str = ""
-            for i in range(len(scc)):
-                # 获取当前节点
-                current = scc[i]
-                # 获取下一个节点的索引
-                next_index = (i + 1) % len(scc)
-                # 获取下一个节点
-                next_item = scc[next_index]
-                # 判断当前元素是 tid 还是 mutex
-                if current in wait_info:  # 如果当前是 tid
-                    # 获取当前线程等待的互斥锁
-                    mutex = wait_info[current]
-                    if i > 0:
-                        cycle_str += " -> \n"
-                    # 添加线程等待互斥锁的信息
-                    cycle_str += f"Thread {current} waits for Mutex {mutex}"
-                    # 添加线程的名称和栈跟踪信息
-                    cycle_str += f"\n\tThread {stack_info[current]['name']} Stack Trace:\n\t"
-                    cycle_str += "\n\t".join(stack_info[current]['frames'])
-
-                else:  # 如果当前是 mutex
-                    if i > 0:
-                        cycle_str += " -> \n"
-                    # 添加互斥锁被线程持有的信息
-                    cycle_str += f"Mutex {current} held by Thread {next_item}"
-
+            cycle_str = self._cycle_str(scc) 
             # 将格式化后的死锁环添加到结果列表中
-            formatted_cycles.append(cycle_str)
+            formatted_cycles.append(''.join(cycle_str))
         return formatted_cycles
+    def _cycle_str(self, scc: List[str]) -> List[str]:
+        cycle_str = ["[-------------------Deadlock--------------------] \n"]
+
+        for i in range(len(scc)):
+            # 获取当前节点
+            current = scc[i]
+            # 判断当前元素是 tid 还是 mutex
+            if current in self.wait_info:  # 如果当前是 tid
+                break
+        stack: List[str] = []
+        def _format_cycle(current: str):
+            # print(f"current: {current}")
+            if current in self.wait_info: # 如果当前是 tid
+                tid = current
+            elif current in self.held_info: # 如果当前是 mutex
+                tid = self.held_info[current]
+            if tid not in stack:
+                cycle_str.append(f"Thread {tid} \"{self.stack_info[tid]['name']}\":")
+                cycle_str.append(f"\n\twaiting for mutex {self.wait_info[tid]}")
+                cycle_str.append("\n\tStack Trace:\n\t")
+                cycle_str.append("\n\t".join(self.stack_info[tid]['frames']))
+                cycle_str.append("\n---|> held by\n")
+                stack.append(current)
+            else:
+                root = tid 
+                cycle_str.append(f"\tThread {root} {self.stack_info[root]['name']}:\n")
+                return 
+            _format_cycle(self.wait_info[tid])
+        _format_cycle(current)
+        return cycle_str
 
     def run(self):
         sccs = self._tarjan()
