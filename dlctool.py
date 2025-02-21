@@ -11,6 +11,7 @@ import fcntl
 import os
 import re
 from threading import Thread
+import time
 from typing import Dict, List, Optional, Set, Tuple
 
 # 打印带有颜色的文本
@@ -69,24 +70,20 @@ def read_lines_with_timeout(file: io.IOBase, timeout: float) -> List[str]:
     :return: 包含读取到的行的列表，如果超时则返回空列表
     """
     lines = []
-    # 获取 IO 对象的文件描述符
-    fd = file.fileno()
-    while True:
-        # 使用 select 监控文件描述符的可读状态
-        ready, _, _ = select.select([fd], [], [], timeout)
-        if fd in ready:
-            try:
+    try:
+        # 获取 IO 对象的文件描述符
+        fd = file.fileno()
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            # 使用 select 监控文件描述符的可读状态
+            ready, _, _ = select.select([fd], [], [], 0.1)
+            if fd in ready:
                 # 读取一行数据
                 line = file.readline()
-                if not line:
-                    # 如果没有数据可读，说明文件已结束
-                    break
-                lines.append(line.rstrip())
-            except OSError as e:
-                print_color(f"读取 IO 对象时出错: {e}", 'red')
-                break
-        else:
-            break
+                if line:
+                    lines.append(line.strip())
+    except Exception as e:
+        sys.stderr.write(f"Error reading lines: {e}\n")
     return lines
 
 class WrapperStrace(object):
@@ -336,6 +333,20 @@ class GDBController:
                         .replace("line=", "\"line\":") \
                         .replace("from=", "\"from\":") 
         json_str = "{" + json_str.split("{", 1)[-1].rsplit("}", 1)[0] + "}"
+        # 处理中文编码问题        
+        def transcode(matches):
+            oct_list = [int(match.replace('\\', ''), 8) for match in matches]
+            oct_bytes = bytes(oct_list)
+            # print(f"oct_bytes: {oct_bytes}")
+            decode_str = oct_bytes.decode('utf-8')
+            return decode_str
+
+        pattern = r'(\\\d{3})'
+        matchs = re.findall(pattern, json_str)
+        if matchs:
+            decode_str = transcode(matchs)
+            json_str = json_str.replace(''.join(matchs), decode_str)
+
         data = json.loads(f"[{json_str}]")
         return data
 
