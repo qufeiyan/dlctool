@@ -12,7 +12,7 @@
 
 ## 安装与依赖
 ### 依赖工具
-- `adb`：用于与 Android 设备通信（如果在 Android 环境中使用）。
+- `adb`：用于与 Android 设备通信（如果在 Android 环境中使用）, 用于**嵌入式linux**时，需要板子安装 `adbd`。
 - `strace`：用于跟踪系统调用，获取 `FUTEX` 事件信息。
 - `gdbserver`：用于远程调试，获取线程和互斥锁的详细信息。
 - `aarch64-unknown-linux-gnu-gdb`：适用于 AArch64 架构的 GDB 调试器。
