@@ -402,7 +402,7 @@ class GDBController:
             thread_info['name'] = target_thread_ids[lwp][1]
             frames = []
             for frame in stack_frames:
-                source = f"{frame['fullname'] if 'fullname' in frame else frame['file'] if 'file' in frame else ''}{':'+ frame['line'] if 'line' in frame else ''}"
+                source = f"{frame['file'] if 'file' in frame else ''}{':'+ frame['line'] if 'line' in frame else ''}"
                 lib = f"{frame['from'] if 'from' in frame else '??'}"
                 frames.append(f"#{frame['level']} {frame['addr']} in {frame['func']} {'at ' + source if source != '' else 'from ' + lib} ")
             thread_info['frames'] = frames
