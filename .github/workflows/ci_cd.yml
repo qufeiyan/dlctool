@@ -34,13 +34,13 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact_name: dlctool-linux
-            build_command: pyinstaller --onefile dlctool.py && mv dist/dlctool ${{ matrix.artifact_name }}
+            build_command: pyinstaller --onefile dlctool.py && mv dist/dlctool dlctool-linux
           - os: windows-latest
             artifact_name: dlctool-windows.exe
-            build_command: pyinstaller --onefile dlctool.py && move dist\dlctool.exe ${{ matrix.artifact_name }}
+            build_command: pyinstaller --onefile dlctool.py && move dist\dlctool.exe dlctool-windows.exe
           - os: macos-latest
             artifact_name: dlctool-macos
-            build_command: pyinstaller --onefile dlctool.py && mv dist/dlctool ${{ matrix.artifact_name }}
+            build_command: pyinstaller --onefile dlctool.py && mv dist/dlctool dlctool-macos
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
