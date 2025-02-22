@@ -61,7 +61,7 @@ def set_noblock(fd):
     fl = fcntl.fcntl(fd, fcntl.F_GETFL)
     fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
 
-def read_lines_with_timeout(file: io.IOBase, timeout: float) -> List[str]:
+def read_lines_with_timeout(file: io.IOBase, timeout: float, maxlines: int = 4) -> List[str]:
     """
     按行从 IO 对象读取数据，设置超时时间。
 
@@ -75,8 +75,10 @@ def read_lines_with_timeout(file: io.IOBase, timeout: float) -> List[str]:
         fd = file.fileno()
         start_time = time.time()
         while time.time() - start_time < timeout:
+            if len(lines) >= maxlines:
+                break
             # 使用 select 监控文件描述符的可读状态
-            ready, _, _ = select.select([fd], [], [], 0.1)
+            ready, _, _ = select.select([fd], [], [], 0.01)
             if fd in ready:
                 # 读取一行数据
                 line = file.readline()
@@ -147,8 +149,8 @@ class WrapperStrace(object):
                     # when you are not sure if the element exists in the set. It does not raise any exception if the element is not found.
                     res.discard((tid, mutex, "wait"))
             elif "not found" in line or "Operation not permitted" in line:
-                advice = "If Operation not permitted, You must restart the adbd in root mode."
-                sys.stderr.write(f"strace 输出：{stdout}\n advice:{advice}\n")
+                advice = "If \"Operation not permitted\", You must restart the adbd in root mode, and make sure that no other debugger is attached to the target device."
+                sys.stderr.write(f"strace 输出：{stdout}\nadvice:{advice}\n")
                 sys.exit(1)
         return res
 
@@ -158,7 +160,7 @@ class GDBController:
         self.port = port
         self.pid = pid
         self.gdbserver_path = gdbserver_path
-        
+        # self._server = None
         gdb_cmd = ['aarch64-unknown-linux-gnu-gdb', '--quiet', '--nx', '-i=mi', '--se', f'{symbol_file}' ] 
         config = [ 
             "-ex", "set pagination off",
@@ -188,23 +190,26 @@ class GDBController:
         self._reader_thread = Thread(target=self._read_output, daemon=True)
         self._reader_thread.start()
 
+        success, msg = self._start_server()
+        if not success:
+            sys.stderr.write(f"Error starting gdbserver: {msg}\n")
+            sys.exit(1)
+
         # 初始化GDB会话
         try: 
             res = self._wait_for_ready()
-            success, msg = self._start_server()
-            if not success:
-                sys.stderr.write(f"Error starting gdbserver: {msg}\n")
-                sys.exit(1)
             self._send_command(f"target remote {host}:{port}")
-            res = self._wait_for_ready(15) # 远程连接超时10s, 才会输出信息，这里设置15s以捕获输出
-            if "Operation timed out" in res:
-                sys.stderr.write(f"Error connecting to {host}:{port}\n")
+            print(f"target remote {host}:{port}")
+            res = self._wait_for_ready() # 远程连接超时10s, 才会输出信息，这里设置15s以捕获输出
+            if "error" in res:
+                sys.stderr.write(f"Error connecting to {host}:{port}, Error message: {res}\n")
                 sys.exit(1)
             self._send_command("set solib-search-path ./")
             self._wait_for_ready()
         except RuntimeError as e:
-            sys.stderr.write(f"Error initializing gdb: {e}\n")
-            sys.stderr.write(self._gdb.stderr.read())
+            advice = "Please make sure that the target ip and port are correct, and that the target process is running."
+            sys.stderr.write(f"Error initializing gdb: {e}\nAdvice: {advice}\n")
+            self._server.terminate()
             sys.exit(1)
 
     def _start_server(self, timeout: float=3.0) -> Tuple[bool, str]:
@@ -524,7 +529,6 @@ class DeadLockChecker:
         return formatted_cycles
     def _cycle_str(self, scc: List[str]) -> List[str]:
         cycle_str = ["[-------------------Deadlock--------------------] \n"]
-
         for i in range(len(scc)):
             # 获取当前节点
             current = scc[i]
@@ -547,7 +551,7 @@ class DeadLockChecker:
                 stack.append(current)
             else:
                 root = tid 
-                cycle_str.append(f"\tThread {root} {self.stack_info[root]['name']}:\n")
+                cycle_str.append(f"Thread {root} \"{self.stack_info[root]['name']}\":\n")
                 return 
             _format_cycle(self.wait_info[tid])
         _format_cycle(current)
