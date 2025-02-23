@@ -1,17 +1,17 @@
 import argparse
-from collections import defaultdict
+import fcntl
 import io
 import json
-from multiprocessing import Queue
-from queue import Empty
-import select
-import sys
-import subprocess
-import fcntl
 import os
 import re
-from threading import Thread
+import select
+import subprocess
+import sys
 import time
+from collections import defaultdict
+from multiprocessing import Queue
+from queue import Empty
+from threading import Thread
 from typing import Dict, List, Optional, Set, Tuple
 
 
@@ -166,10 +166,12 @@ class WrapperStrace(object):
                 if "FUTEX_WAIT" in status:
                     res.add((tid, mutex, "wait"))
                 elif "FUTEX_WAKE" in status:
-                    # when you are not sure if the element exists in the set. It does not raise any exception if the element is not found.
+                    # when you are not sure if the element exists in the set. It does not raise any
+                    # exception if the element is not found.
                     res.discard((tid, mutex, "wait"))
             elif "not found" in line or "Operation not permitted" in line:
-                advice = 'If "Operation not permitted", You must restart the adbd in root mode, and make sure that no other debugger is attached to the target device.'
+                advice = 'If "Operation not permitted", You must restart the adbd in root mode, \
+                          and make sure that no other debugger is attached to the target device.'
                 sys.stderr.write(f"strace 输出：{stdout}\nadvice:{advice}\n")
                 sys.exit(1)
         return res
@@ -455,10 +457,12 @@ class GDBController:
             thread_info["name"] = target_thread_ids[lwp][1]
             frames = []
             for frame in stack_frames:
-                source = f"{frame['file'] if 'file' in frame else ''}{':' + frame['line'] if 'line' in frame else ''}"
+                source = f"{frame['file'] if 'file' in frame else ''} \
+                    {':' + frame['line'] if 'line' in frame else ''}"
                 lib = f"{frame['from'] if 'from' in frame else '??'}"
                 frames.append(
-                    f"#{frame['level']} {frame['addr']} in {frame['func']} {'at ' + source if source != '' else 'from ' + lib} "
+                    f"#{frame['level']} {frame['addr']} in {frame['func']} \
+                    {'at ' + source if source != '' else 'from ' + lib} "
                 )
             thread_info["frames"] = frames
             res[lwp] = thread_info

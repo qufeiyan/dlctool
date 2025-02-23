@@ -22,7 +22,7 @@ jobs:
       - name: Code formatting check
         run: black --check .
       - name: Static code analysis
-        run: flake8 .
+        run: flake8 --max-line-length=120 .
 
   # 定义 CD 任务，包含多个针对不同操作系统的构建作业
   cd:
