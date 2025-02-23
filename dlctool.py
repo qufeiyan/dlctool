@@ -101,17 +101,24 @@ class WrapperStrace(object):
     parse output
     """
 
-    def __init__(self, pid: int, strace_path: str = "./strace", timeout: int = 4):
+    def __init__(
+        self,
+        pid: int,
+        strace_path: str = "./strace",
+        timeout: int = 4,
+        sudo: bool = False,
+    ):
         self.pid = pid
         self.timeout = timeout
         self.strace_path = strace_path
+        self.sudo = sudo
 
     def run(self) -> Set[Tuple[str, str, str]]:
         strace_path = f"{self.strace_path}"
         strace_cmd = [
             "adb",
             "shell",
-            "sudo",
+            f"{'sudo' if self.sudo else ''}",
             strace_path,
             "-e",
             "futex",
@@ -119,6 +126,7 @@ class WrapperStrace(object):
             "-p",
             str(self.pid),
         ]
+        # print(f"Running strace: {' '.join(strace_cmd)}")
         try:
             proc = subprocess.Popen(
                 strace_cmd,
@@ -457,12 +465,14 @@ class GDBController:
             thread_info["name"] = target_thread_ids[lwp][1]
             frames = []
             for frame in stack_frames:
-                source = f"{frame['file'] if 'file' in frame else ''} \
-                    {':' + frame['line'] if 'line' in frame else ''}"
+                source = (
+                    f"{frame['file'] if 'file' in frame else ''}"
+                    + f"{':' + frame['line'] if 'line' in frame else ''}"
+                )
                 lib = f"{frame['from'] if 'from' in frame else '??'}"
                 frames.append(
-                    f"#{frame['level']} {frame['addr']} in {frame['func']} \
-                    {'at ' + source if source != '' else 'from ' + lib} "
+                    f"#{frame['level']} {frame['addr']} in {frame['func']}"
+                    f"{' at ' + source if source != '' else ' from ' + lib} "
                 )
             thread_info["frames"] = frames
             res[lwp] = thread_info
@@ -655,7 +665,10 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "-d", "--tools-dir", type=str, default="/usr/local/bin/", help="Path to tools"
     )
-    # parser.add_argument('command', nargs=argparse.REMAINDER, type=str, help='Command to run under strace')
+    # 添加 --sudo 选项
+    parser.add_argument(
+        "--sudo", action="store_true", help="以 sudo 权限运行（需要输入密码）"
+    )
     parser.add_argument(
         "-t",
         "--timeout",
@@ -686,7 +699,9 @@ def main():
     print(f"tools path: {args.tools_dir}")
     # 创建strace wrapper
     strace_path = args.tools_dir + "/" + "strace"
-    wrapperStrace = WrapperStrace(pid, strace_path=strace_path, timeout=args.timeout)
+    wrapperStrace = WrapperStrace(
+        pid, strace_path=strace_path, timeout=args.timeout, sudo=args.sudo
+    )
     # 运行strace并获取结果
     res = wrapperStrace.run()
 
