@@ -61,6 +61,8 @@ jobs:
   create-release:
     name: Create Release
     needs: cd
+    permissions:
+      contents: write  # 授予写入内容的权限
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -70,7 +72,7 @@ jobs:
           path: artifacts
       - name: Generate release tag
         id: generate_tag
-        run: echo "::set-output name=tag::v$(date +%Y%m%d%H%M%S)"
+        run: echo "tag=v$(date +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
