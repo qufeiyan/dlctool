@@ -1,8 +1,6 @@
 import argparse
-import fcntl
 import io
 import json
-import os
 import re
 import select
 import subprocess
@@ -57,12 +55,6 @@ def get_pid_from_executable(name: str) -> Optional[str]:
         sys.stderr.write(f"Error getting PID: {e}\n")
         sys.exit(1)
     return pid
-
-
-def set_noblock(fd):
-    # 设置非阻塞读取
-    fl = fcntl.fcntl(fd, fcntl.F_GETFL)
-    fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
 
 
 def read_lines_with_timeout(
